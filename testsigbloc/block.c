@@ -20,7 +20,7 @@ int main(){
     sigaddset(&s,SIGINT);  //将SIGINT添加到信号集s
     sigprocmask(SIG_BLOCK,&s,NULL); //将信号集s设为阻塞信号集
     while(1){
-        sigpending(&p);  //获取为决信号集存到p
+        sigpending(&p);  //获取未决信号集存到p
         printsigset(&p); //打印信号集p
         sleep(1);
     }
