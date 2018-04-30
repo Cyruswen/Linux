@@ -3,7 +3,6 @@
 #include<string.h>
 #include<unistd.h>
 
-//enene
 
 int main(){
 	int fds[2];
