@@ -12,7 +12,7 @@ unsigned int mysleep(unsigned int second){
     New.sa_handler = sig_alarm;
     sigemptyset(&New.sa_mask);
     sigaction(SIGALRM, &New, &old);
-    alarm(second);
+    alarm(second);//这里有BUG
     pause();
     unsigned int unslept = alarm(0);
     sigaction(SIGALRM, &old, NULL);
