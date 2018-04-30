@@ -15,7 +15,7 @@ unsigned int mysleep(unsigned int nsess){
     sigemptyset(&news.sa_mask);
     news.sa_flags = 0;
     sigaction(SIGALRM, &news, &old);
-    alarm(nsess);
+    alarm(nsess);//此处有BUG
     pause();
     unslept = alarm(0);
     sigaction(SIGALRM, &old, NULL);
