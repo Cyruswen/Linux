@@ -11,6 +11,7 @@ void processB(){
     printf("I am the parent process,%d!\n",getpid());
 }
 
+//这是注释
 int main(){
     pid_t pid;
     pid = fork();
