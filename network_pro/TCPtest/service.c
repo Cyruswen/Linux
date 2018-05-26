@@ -21,13 +21,11 @@ int startup(char* ip, int port){
 
     if(bind(sock, (struct sockaddr*)&local, sizeof(local)) < 0){
         printf("bind error!\n");
-        close(sock);
         exit(3);
     }
 
     if(listen(sock, 5) < 0){
         printf("listen error!\n");
-        close(sock);
         exit(4);
     }
     
@@ -42,6 +40,7 @@ void service(int sock, char* ip, int port){
         if(s > 0){
             buf[s] = 0;
             printf("[%s:%d] says: %s\n",ip, port, buf);
+            //TODO
             write(sock, buf, strlen(buf));
         }
         else if(s == 0){
