@@ -17,13 +17,29 @@ void Usage(){
 }
 
 void ProcessRequest(int client_fd, struct sockaddr_in* client_addr){
-    //TODO
+    char buf[1024] = {0};
+    for(;;){
+        ssize_t read_size = read(client_fd, buf, sizeof(buf));
+        if(read_size < 0){
+            perror("read");
+            continue;
+        }
+        //inet_ntoa 将十进制网络序列转换为点分十进制
+        if(read_size == 0){
+            printf("client %s say goodbye!\n", inet_ntoa(client_addr->sin_addr));
+            close(client_fd);
+            break;
+        }
+        buf[read_size] = '\0';
+        printf("client: %s say: %s\n", inet_ntoa(client_addr->sin_addr), buf);
+        write(client_fd, buf, strlen(buf));
+    }
     return;
 }
 
 void* CreateWorker(void* ptr){
     Arg* arg = (Arg*)ptr;
-    ProcessRequest(arg->fd, arg->addr);
+    ProcessRequest(arg->fd, &arg->addr);
     free(arg);
 }
 
@@ -36,6 +52,7 @@ int main(int argc, char* argv[]){
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(atoi(argv[2]));
+    //inet_addr 将点分十进制转换为长整型
     addr.sin_addr.s_addr = inet_addr(argv[1]);
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
