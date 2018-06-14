@@ -11,6 +11,7 @@
 #define MAXSIZE 1024
 
 
+
 void usage(){
     printf("usage:./server [ip] [port]\n");
 }
