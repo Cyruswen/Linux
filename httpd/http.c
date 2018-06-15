@@ -46,6 +46,42 @@ int StartUp(char* ip, int port){
     return fd;
 }
 
+int get_line(int sock, char* buf, int size){
+    if(buf == NULL){
+        return -1;
+    }
+    //如果s的发送缓冲中没有数据或者数据被协议成功发送完毕后，recv先检查套
+    //接字s的接收缓冲区，如果s接收缓冲区中没有数据或者协议正在接收数据，那
+    //么recv就一直等待，直到协议把数据接收完毕。当协议把数据接收完毕，recv
+    //函数就把s的接收缓冲中的数据copy到buf中（注意协议接收到的数据可能大于
+    //buf的长度，所以在这种情况下要调用几次recv函数才能把s的接收缓冲中的数
+    //据copy完。recv函数仅仅是copy数据，真正的接收数据是协议来完成的）；
+    //recv函数的返回值为实际copy的字节数
+    //MSG_PEEK 窥看外来消息。
+    int i = 0;
+    ssize_t _s = -1;
+    char ch = '\0';
+    while(i < size - 1 && ch != '\n'){
+        _s = recv(sock, &ch, 1, 0);
+        if(_s > 0){
+            if(ch == '\r'){
+                if((_s=recv(sock, &ch, 1, MSG_PEEK))){
+                    if(_s > 0 && ch == '\n'){
+                        recv(sock, &ch, 1, 0);
+                    }
+                }
+            }
+            buf[i++] = ch;
+        }
+        else{
+            buf[i++] = '\n';
+            break;
+        }
+    }
+    buf[i] = '\0';
+    return i;
+}
+
 void accept__request(int sock){
   char buf[MAXSIZE] = {0}; 
   char method[MAXSIZE/2];
@@ -55,7 +91,7 @@ void accept__request(int sock){
   memset(method,'\0',sizeof(method));
   memset(url, '\0',sizeof(url));
   memset(path, '\0', sizeof(path));
-  //TODO
+  if()
 }
 
 void* handle_client(void* arg){
