@@ -8,8 +8,17 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <ctype.h>
+#include <strings.h>
 #define MAXSIZE 1024
-
+#define DEFPAGE "index.html"
+//首先设置结构体关键字
+//创建套接字
+//绑定套接字
+//监听套接字
+//接收套接字
+//创建多线程处理套接字（分析接收到的套接字的
+//http协议中的方法。）
 
 void usage(){
     printf("usage:./server [ip] [port]\n");
@@ -65,16 +74,18 @@ int get_line(int sock, char* buf, int size){
         _s = recv(sock, &ch, 1, 0);
         if(_s > 0){
             if(ch == '\r'){
-                if((_s=recv(sock, &ch, 1, MSG_PEEK))){
-                    if(_s > 0 && ch == '\n'){
-                        recv(sock, &ch, 1, 0);
-                    }
+                _s=recv(sock, &ch, 1, MSG_PEEK);
+                if(_s > 0 && ch == '\n'){
+                    recv(sock, &ch, 1, 0);
+                }else{
+                    ch = '\n';
                 }
+            
             }
             buf[i++] = ch;
         }
         else{
-            buf[i++] = '\n';
+           // buf[i++] = '\n';
             break;
         }
     }
@@ -82,16 +93,73 @@ int get_line(int sock, char* buf, int size){
     return i;
 }
 
+void echo_error(int error_code){
+    switch(error_code){
+    case 404:
+        break;
+    case 500:
+        break;
+    default:
+        break;
+    }
+}
+
 void accept__request(int sock){
-  char buf[MAXSIZE] = {0}; 
-  char method[MAXSIZE/2];
-  char url[MAXSIZE];
-  char path[MAXSIZE];
-  memset(buf,'\0',sizeof(buf));
-  memset(method,'\0',sizeof(method));
-  memset(url, '\0',sizeof(url));
-  memset(path, '\0', sizeof(path));
-  if()
+    char buf[MAXSIZE] = {0}; 
+    char method[MAXSIZE/32];
+    char url[MAXSIZE];
+    char path[MAXSIZE];
+    int error_code = 200;
+    size_t i = 0;
+    size_t j = 0;
+    memset(buf,'\0',sizeof(buf));
+    memset(method,'\0',sizeof(method));
+    memset(url, '\0',sizeof(url));
+    memset(path, '\0', sizeof(path));
+    if(get_line(sock, buf, sizeof(buf)) == 0){
+        error_code = 404;
+        echo_error(error_code);
+    }
+    while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(method) - 1){
+        method[j++] = buf[i++];
+    }
+    method[j] = '\0';
+    j = 0;
+    while(isspace(buf[i])){
+        i++;
+    }
+    while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(url) - 1){
+        url[j++] = buf[i++];
+    }
+    url[j] = '\0';
+    //strcasecmp用忽略大小写比较字符串.，通过strcasecmp函数可以指定每个
+    //字符串用于比较的字符数，strncasecmp用来比较参数s1和s2字符串前n个字符，比较时会自动忽略大小写的差异。
+    int cgi = 0;
+    if(strcasecmp(method, "POST") != 0 && strcasecmp(method, "GET") != 0){
+        perror("strcasecmp");
+        exit(-1);
+    }
+    if(strcasecmp(method, "post") == 0){
+        cgi = 1;
+    }
+    else if(strcasecmp(method, "get") == 0){
+        char* cur_url = url;
+        while(*cur_url != '\0' && *cur_url != '?'){
+            cur_url++;
+        }
+        //把格式化的数据写入某个字符串中 头文件stdio.h
+        if(*cur_url == '?'){
+            *cur_url = '\0';
+            cgi = 1;
+        }
+        ++cur_url;
+        sprintf(path,"wwwRoot%s",url);
+        //TODO
+    }
+    else{
+        error_code = 404;
+        echo_error(error_code);
+    }
 }
 
 void* handle_client(void* arg){
