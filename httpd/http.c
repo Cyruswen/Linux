@@ -10,8 +10,9 @@
 #include <pthread.h>
 #include <ctype.h>
 #include <strings.h>
+#include <sys/stat.h>
 #define MAXSIZE 1024
-#define DEFPAGE "index.html"
+#define HOMEPAGE "index.html"
 //首先设置结构体关键字
 //创建套接字
 //绑定套接字
@@ -104,7 +105,72 @@ void echo_error(int error_code){
     }
 }
 
-void accept__request(int sock){
+void clear_header(int sock){
+    char line[MAXSIZE];
+    do{
+        printf("%s", line);
+        get_line(sock, line, sizeof(line));
+    }while(strcmp(line, "\n") != 0);
+}
+
+int exe_cgi(int sock, char path[], char method[], char* cur_url){
+    char line[MAXSIZE];
+    int content_length = -1;
+    char method_env[MAXSIZE/32];
+    char quer_string_env[MAXSIZE];
+    char content_length_env[MAXSIZE/16];
+
+    if(strcasecmp(method, "GET") == 0){
+        clear_header(sock);
+    }else{
+        //post
+        while(strcmp(line, "\n")){
+            //找到正文长度
+            if(strncmp(line, "Content-length: ", 16) == 0){
+                //找到并将正文长度保存起来
+                content_length = atoi(line + 16);
+            }
+            get_line(sock, line, sizeof(line)); 
+        }
+        if(content_length == -1){
+            return 404;
+        }
+    }
+    printf("method:%s, path:%s\n", method, path);
+    //发送时加上报头
+    sprintf(line, "HTTP/1.0 200 OK\r\n");
+    send(sock, line, strlen(line), 0);
+    
+    sprintf(line, "Content-Type:text/html\r\n");
+    send(sock, line, strlen(line), 0);
+
+    //创建两个管道（父进程需要知道子进程的执行结果，子进程需要参数，所以要进行进程间通信）
+    //input -- 父进程将参数传给子进程
+    //output -- 子进程将执行结果传给父进程
+    int input[2];
+    int output[2];//0表示读端 1表示写端
+    pipe(input);
+    pipe(output);
+
+    pid_t pid = fork();
+    if(pid < 0){
+        return 404;
+    }
+    else if(pid == 0){
+        close(input[1]);
+        close(output[0]);
+
+        //将标准输入重定向到input
+        //将标准输出重定向到output
+        dup2(input[0], 0);
+        dup2(output[1],1);
+        //将参数通过环境变量传给子进程
+        sprintf(method_env, "REQUEST_METHOD=%s",cur_url);
+        
+    }
+}
+
+void accept_request(int sock){
     char buf[MAXSIZE] = {0}; 
     char method[MAXSIZE/32];
     char url[MAXSIZE];
@@ -112,6 +178,7 @@ void accept__request(int sock){
     int error_code = 200;
     size_t i = 0;
     size_t j = 0;
+    char* cur_url;
     memset(buf,'\0',sizeof(buf));
     memset(method,'\0',sizeof(method));
     memset(url, '\0',sizeof(url));
@@ -143,7 +210,7 @@ void accept__request(int sock){
         cgi = 1;
     }
     else if(strcasecmp(method, "get") == 0){
-        char* cur_url = url;
+        cur_url = url;
         while(*cur_url != '\0' && *cur_url != '?'){
             cur_url++;
         }
@@ -153,18 +220,48 @@ void accept__request(int sock){
             cgi = 1;
         }
         ++cur_url;
-        sprintf(path,"wwwRoot%s",url);
-        //TODO
     }
     else{
         error_code = 404;
         echo_error(error_code);
+    }   
+    //将wwwRoot拼接到url之前，以命令形式输出到path
+    sprintf(path,"wwwRoot%s",url);
+    //请求的资源是web根目录，自动拼接上首页
+    if(path[strlen(path-1)] == '/'){
+        strcat(path, HOMEPAGE);
+    }
+    struct stat st;
+   //stat() 通过文件名filename获取文件信息，并保存在buf所指的结构体stat中 
+    if(stat(path, &st)){
+        error_code = 404;
+        echo_error(error_code);
+    }else{
+        if(S_ISDIR(st.st_mode)){
+            //请求的资源如果是目录，给每个目录下加一个缺省的首页
+            strcat(path, HOMEPAGE);
+        }
+        else{
+            // S_IXUSR(S_IEXEC) 00100     文件所有者具可执行权限
+            // S_IXGRP 00010             用户组具可执行权限
+            // S_IXOTH 00001             其他用户具可执行权限
+            if((st.st_mode & S_IXUSR) || (st.st_mode & S_IXGRP) || (st.st_mode & S_IXOTH)){
+                cgi = 1;
+            }
+        }
+        if(cgi == 1){
+            error_code = exe_cgi(sock, path, method, cur_url);
+        }
+        else{
+            // 不是cgi, get方法，不带参数
+            echo_www(sock, path, st.st_size, &error_code);
+        }
     }
 }
 
 void* handle_client(void* arg){
     int* sock = (int*)arg;
-    accept__request(*sock);
+    accept_request(*sock);
     return NULL;
 }
 
