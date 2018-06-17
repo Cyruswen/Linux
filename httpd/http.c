@@ -20,7 +20,7 @@
 //接收套接字
 //创建多线程处理套接字（分析接收到的套接字的
 //http协议中的方法。）
-
+//haha
 void usage(){
     printf("usage:./server [ip] [port]\n");
 }
