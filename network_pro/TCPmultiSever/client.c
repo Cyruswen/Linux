@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #define MAX 1024
+//enen
 
 int main(int argc, char *argv[]){
     if(argc != 3){
