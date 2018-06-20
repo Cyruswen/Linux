@@ -8,14 +8,10 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <pthread.h>
-#define MAXSIZE 1024
-
-
-
+#define MAXSIZE 102
 void usage(){
     printf("usage:./server [ip] [port]\n");
 }
-
 int StartUp(char* ip, int port){
     if(ip == NULL){
         exit(-1);
@@ -46,7 +42,6 @@ int StartUp(char* ip, int port){
     }
     return fd;
 }
-
 void accept__request(int sock){
   char buf[MAXSIZE] = {0}; 
   char method[MAXSIZE/2];
