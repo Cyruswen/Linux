@@ -74,43 +74,44 @@ int get_line(int sock, char* buf, int size){
     while(i < size - 1 && ch != '\n'){
         _s = recv(sock, &ch, 1, 0);
         if(_s > 0){
-            if(ch == '\r'){
+            if(ch == '\r')
+            {
                 _s=recv(sock, &ch, 1, MSG_PEEK);
-                if(_s > 0 && ch == '\n'){
-                    recv(sock, &ch, 1, 0);
-                }else{
-                    ch = '\n';
+                if(_s <= 0)
+                {
+                    return -1;
                 }
-            
+                else
+                {
+                    if(ch == '\n')
+                    {
+                        _s = recv(sock, &ch, 1, 0);
+                        if(_s <= 0)
+                        {
+                            return -1;
+                        }
+                    }
+                    else
+                    {
+                        ch = '\n';
+                    }
+                }
             }
             buf[i++] = ch;
-        }
-        else{
-           // buf[i++] = '\n';
-            break;
         }
     }
     buf[i] = '\0';
     return i;
 }
 
-void echo_error(int error_code){
-    switch(error_code){
-    case 404:
-        break;
-    case 500:
-        break;
-    default:
-        break;
-    }
-}
 
 void clear_header(int sock){
     char line[MAXSIZE];
+    int ret = -1;
     do{
         printf("%s", line);
-        get_line(sock, line, sizeof(line));
-    }while(strcmp(line, "\n") != 0);
+        ret = get_line(sock, line, sizeof(line));
+    }while(ret > 0 && strcmp(line, "\n") != 0);
 }
 
 int exe_cgi(int sock, char path[], char method[], char* cur_url){
@@ -170,6 +171,27 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
     }
 }
 
+//void echo_error(int sock, int status_code)
+//{
+//    char _404_path[] = "webroot/error_code/404/404.html";
+//
+//}
+
+void status_response(int sock, int status_code)
+{
+    clear_header(sock);
+    switch(status_code)
+    {
+    case 404:
+//        echo_error(sock, status_code);
+        break;
+    case 503:
+        break;
+    default:
+        break;
+    }
+}
+
 void accept_request(int sock){
     char buf[MAXSIZE] = {0}; 
     char method[MAXSIZE/32];
@@ -183,14 +205,16 @@ void accept_request(int sock){
     memset(method,'\0',sizeof(method));
     memset(url, '\0',sizeof(url));
     memset(path, '\0', sizeof(path));
-    if(get_line(sock, buf, sizeof(buf)) == 0){
+    if(get_line(sock, buf, sizeof(buf)) <= 0){
         error_code = 404;
-        echo_error(error_code);
+        goto end;
     }
+    //走到这里buf已经取到了第一行
     while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(method) - 1){
         method[j++] = buf[i++];
     }
     method[j] = '\0';
+    //已经获得了请求的方法
     j = 0;
     while(isspace(buf[i])){
         i++;
@@ -199,6 +223,8 @@ void accept_request(int sock){
         url[j++] = buf[i++];
     }
     url[j] = '\0';
+    //已经获取到了URL
+    //TODO
     //strcasecmp用忽略大小写比较字符串.，通过strcasecmp函数可以指定每个
     //字符串用于比较的字符数，strncasecmp用来比较参数s1和s2字符串前n个字符，比较时会自动忽略大小写的差异。
     int cgi = 0;
@@ -257,6 +283,12 @@ void accept_request(int sock){
             echo_www(sock, path, st.st_size, &error_code);
         }
     }
+end:
+    if(error_code != 200)
+    {
+        status_response(sock, error_code);
+    }
+    close(sock);
 }
 
 void* handle_client(void* arg){
@@ -283,10 +315,24 @@ int main(int argc, char* argv[]){
             fflush(stdout);
             continue;
         }
-        pthread_t tid;
+        //程序走到这里说明有新的连接到来
+        char buf_ip[1024] = {0};
+        if(inet_ntop(AF_INET, &client_addr.sin_addr, buf_ip, sizeof(buf_ip)) == NULL)
+        {
+            perror("inet_ntop");
+            return -5;
+        }
+        pthread_t tid = 0;
         //利用子线程对接受到的套接字进行处理
-        pthread_create(&tid, NULL, handle_client, (void*)&client_fd);
+        int pthread_create_ret =  pthread_create(&tid, NULL, handle_client, (void*)&client_fd);
+        if(pthread_create_ret < 0)
+        {
+            perror("pthread_create");
+            close(listen_socket);
+            return -6;
+        }
         pthread_detach(tid);
     }
+    close(listen_socket);
     return 0;
 }
