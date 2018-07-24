@@ -114,6 +114,7 @@ void clear_header(int sock){
     }while(ret > 0 && strcmp(line, "\n") != 0);
 }
 
+//TODO
 int exe_cgi(int sock, char path[], char method[], char* cur_url){
     char line[MAXSIZE];
     int content_length = -1;
@@ -224,8 +225,7 @@ void accept_request(int sock){
     }
     url[j] = '\0';
     //已经获取到了URL
-    //TODO
-    //strcasecmp用忽略大小写比较字符串.，通过strcasecmp函数可以指定每个
+    //strcasecmp用忽略大小写比较字符串，通过strcasecmp函数可以指定每个
     //字符串用于比较的字符数，strncasecmp用来比较参数s1和s2字符串前n个字符，比较时会自动忽略大小写的差异。
     int cgi = 0;
     if(strcasecmp(method, "POST") != 0 && strcasecmp(method, "GET") != 0){
@@ -249,7 +249,7 @@ void accept_request(int sock){
     }
     else{
         error_code = 404;
-        echo_error(error_code);
+        goto end;
     }   
     //将wwwRoot拼接到url之前，以命令形式输出到path
     sprintf(path,"wwwRoot%s",url);
@@ -259,9 +259,9 @@ void accept_request(int sock){
     }
     struct stat st;
    //stat() 通过文件名filename获取文件信息，并保存在buf所指的结构体stat中 
-    if(stat(path, &st)){
+    if(stat(path, &st) < 0){
         error_code = 404;
-        echo_error(error_code);
+        goto end;
     }else{
         if(S_ISDIR(st.st_mode)){
             //请求的资源如果是目录，给每个目录下加一个缺省的首页
@@ -280,7 +280,8 @@ void accept_request(int sock){
         }
         else{
             // 不是cgi, get方法，不带参数
-            echo_www(sock, path, st.st_size, &error_code);
+            clear_header(sock);
+            error_code = echo_www(sock, path, st.st_size, &error_code);
         }
     }
 end:
