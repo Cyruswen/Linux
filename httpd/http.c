@@ -1,18 +1,4 @@
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <arpa/inet.h>
-#include <sys/wait.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/types.h>
-#include <pthread.h>
-#include <ctype.h>
-#include <strings.h>
-#include <sys/stat.h>
-#define MAXSIZE 1024
-#define HOMEPAGE "index.html"
+#include "http.h"
 //首先设置结构体关键字
 //创建套接字
 //绑定套接字
@@ -21,6 +7,9 @@
 //创建多线程处理套接字（分析接收到的套接字的
 //http协议中的方法。）
 //haha
+const char* status_line =  "HTTP/1.0 200 OK\r\n";
+const char* blank_line = "\r\n";
+
 void usage(){
     printf("usage:./server [ip] [port]\n");
 }
@@ -29,7 +18,7 @@ int StartUp(char* ip, int port){
     if(ip == NULL){
         exit(-1);
     }
-    int opt;
+    int opt = 1;
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
@@ -45,7 +34,7 @@ int StartUp(char* ip, int port){
         exit(-2);
     }
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    if(bind(fd, (struct sockaddr*)&addr, sizeof(addr) < 0)){
+    if(bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0){
         perror("bind");
         exit(-3);
     }
@@ -114,7 +103,6 @@ void clear_header(int sock){
     }while(ret > 0 && strcmp(line, "\n") != 0);
 }
 
-//TODO
 int exe_cgi(int sock, char path[], char method[], char* cur_url){
     char line[MAXSIZE];
     int content_length = -1;
@@ -124,9 +112,11 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
 
     if(strcasecmp(method, "GET") == 0){
         clear_header(sock);
-    }else{
+    }
+    else
+    {
         //post
-        while(strcmp(line, "\n")){
+        while(strcmp(line, "\n") != 0){
             //找到正文长度
             if(strncmp(line, "Content-length: ", 16) == 0){
                 //找到并将正文长度保存起来
@@ -141,42 +131,116 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
     printf("method:%s, path:%s\n", method, path);
     //发送时加上报头
     sprintf(line, "HTTP/1.0 200 OK\r\n");
+    sprintf(line, "\r\n");
     send(sock, line, strlen(line), 0);
     
-    sprintf(line, "Content-Type:text/html\r\n");
-    send(sock, line, strlen(line), 0);
+    //sprintf(line, "Content-Type:text/html\r\n");
+    //send(sock, line, strlen(line), 0);
 
     //创建两个管道（父进程需要知道子进程的执行结果，子进程需要参数，所以要进行进程间通信）
     //input -- 父进程将参数传给子进程
     //output -- 子进程将执行结果传给父进程
     int input[2];
     int output[2];//0表示读端 1表示写端
-    pipe(input);
-    pipe(output);
+    if(pipe(input) < 0 || pipe(output) < 0)
+    {
+        perror("fork");
+        return 404;
+    }
 
     pid_t pid = fork();
     if(pid < 0){
         return 404;
     }
     else if(pid == 0){
-        close(input[1]);
-        close(output[0]);
-
+        //子进程
+        close(input[1]);//子进程从input读父进程传来的参数，所以不需要写，关闭写端
+        close(output[0]);//子进程将执行结果写到管道发送给父进程，不需要读，所以
+        //环境变量父子进程都能看到
+        sprintf(method_env, "METHOD=%s", method);
+        putenv(method_env);
+        if(strcasecmp(method, "GET") == 0)
+        {
+            sprintf(quer_string_env, "QUER_STRING=%s", cur_url);
+            putenv(quer_string_env);
+        }
+        else
+        {
+            sprintf(content_length_env, "CONTENT_LENGTH=%d", content_length);
+            putenv(content_length_env);
+        }
         //将标准输入重定向到input
         //将标准输出重定向到output
-        dup2(input[0], 0);
-        dup2(output[1],1);
-        //将参数通过环境变量传给子进程
-        sprintf(method_env, "REQUEST_METHOD=%s",cur_url);
-        
+        if(dup2(input[0], 0) < 0 || dup2(output[1], 1) < 0)
+        {
+            perror("dup2");
+            return 404;
+        }
+        int ret = execl(path, path, NULL);
+        if(ret == -1)
+        {
+            perror("execl");
+            return 404;
+        }
+        exit(-1);
     }
+    else
+    //父进程
+    {
+        close(input[0]);
+        close(output[1]);
+        int i = 0;
+        char ch = '\0';
+        if(strcasecmp(method, "post") == 0)
+        {
+            for(; i < content_length; i++)
+            {
+                recv(sock, &ch,  1, 0);
+                send(input[1], &ch, 1, 0);
+            }
+        }
+        //走到GET
+        ch = '\0';
+        while(read(output[0], &ch, 1))
+        {
+            send(sock, &ch, 1, 0);
+        }
+        if(waitpid(pid, NULL, 0) < 0)
+        {
+            perror("waitpid");
+            return 404;
+        }
+        close(input[1]);
+        close(output[0]);
+    }
+    return 200;
 }
 
-//void echo_error(int sock, int status_code)
-//{
-//    char _404_path[] = "webroot/error_code/404/404.html";
-//
-//}
+void echo_error(int sock, int status_code)
+{
+    (void)status_code;
+    char _404_path[] = "webroot/error_code/404/404.html";
+    int fd = open(_404_path, O_RDONLY);
+    if(fd < 0)
+    {
+        perror("open");
+        return;
+    }
+    char buf[MAXSIZE/4];
+    char Blank[] = "\r\n";
+    sprintf(buf, "HTTP 404 NOT Found");
+    send(sock, buf, strlen(buf), 0);
+    send(sock, Blank, strlen(Blank), 0);
+    struct stat st;
+    stat(_404_path, &st);
+    ssize_t size = sendfile(sock, fd, NULL, st.st_size);
+    if(size < 0)
+    {
+        perror("snedfile");
+        return;
+    }
+    close(fd);
+}
 
 void status_response(int sock, int status_code)
 {
@@ -184,13 +248,36 @@ void status_response(int sock, int status_code)
     switch(status_code)
     {
     case 404:
-//        echo_error(sock, status_code);
+        echo_error(sock, status_code);
         break;
     case 503:
         break;
     default:
         break;
     }
+}
+
+int echo_www(int sock, const char* path, int size)
+{
+    int fd = open(path, O_RDONLY);
+    if(fd < 0)
+    {
+        perror("open");
+        return 404;
+    }
+    send(sock, "status_line", strlen(status_line), 0);
+    char len_buf[MAXSIZE/4] = {0};
+    sprintf(len_buf, "Content-Length: %u\r\n", size);
+    send(sock, len_buf, strlen(len_buf), 0);
+    send(sock, blank_line, strlen(blank_line), 0);
+    ssize_t ret = sendfile(sock, fd, NULL, size);
+    if(ret < 0)
+    {
+        perror("sendfile");
+        return 404;
+    }
+    close(fd);
+    return 200;
 }
 
 void accept_request(int sock){
@@ -281,7 +368,7 @@ void accept_request(int sock){
         else{
             // 不是cgi, get方法，不带参数
             clear_header(sock);
-            error_code = echo_www(sock, path, st.st_size, &error_code);
+            error_code = echo_www(sock, path, st.st_size);
         }
     }
 end:
