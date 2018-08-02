@@ -219,24 +219,30 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
 void echo_error(int sock, int status_code)
 {
     (void)status_code;
-    char _404_path[] = "webroot/error_code/404/404.html";
+    const char* _404_path = "webRoot/error_code/404/404.html";
     int fd = open(_404_path, O_RDONLY);
     if(fd < 0)
     {
+        printf("打开失败了\n");
         perror("open");
         return;
     }
     char buf[MAXSIZE/4];
-    char Blank[] = "\r\n";
-    sprintf(buf, "HTTP 404 NOT Found");
+    const char* Blank = "\r\n";
+    sprintf(buf, "HTTP 404 Not Found\r\n");
     send(sock, buf, strlen(buf), 0);
     send(sock, Blank, strlen(Blank), 0);
     struct stat st;
-    stat(_404_path, &st);
+    if(stat(_404_path, &st) < 0)
+    {
+        printf("找不到文件");
+    }
+    //printf("I am here!\n");
+    
     ssize_t size = sendfile(sock, fd, NULL, st.st_size);
     if(size < 0)
     {
-        perror("snedfile");
+        perror("sendfile");
         return;
     }
     close(fd);
@@ -244,10 +250,12 @@ void echo_error(int sock, int status_code)
 
 void status_response(int sock, int status_code)
 {
+    //printf("status_code is %d\n", status_code);
     clear_header(sock);
     switch(status_code)
     {
     case 404:
+        printf("我在这儿\n");
         echo_error(sock, status_code);
         break;
     case 503:
@@ -259,7 +267,7 @@ void status_response(int sock, int status_code)
 
 int echo_www(int sock, const char* path, int size)
 {
-    printf("%s\n", path);
+    //printf("%s\n", path);
     int fd = open(path, O_RDONLY);
     printf("open file\n");
     if(fd < 0)
@@ -350,7 +358,7 @@ void accept_request(int sock){
     printf("path2:%s\n",path);
    //stat() 通过文件名filename获取文件信息，并保存在buf所指的结构体stat中 
     if(stat(path, &st) < 0){
-        printf("stat错了");
+        //printf("走到这儿了\n");
         error_code = 404;
         goto end;
     }else{
@@ -378,6 +386,7 @@ void accept_request(int sock){
 end:
     if(error_code != 200)
     {
+        //printf("走到这儿了\n");
         status_response(sock, error_code);
     }
     close(sock);
