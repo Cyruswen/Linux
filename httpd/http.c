@@ -11,23 +11,23 @@ const char* status_line =  "HTTP/1.0 200 OK\r\n";
 const char* blank_line = "\r\n";
 
 void usage(){
-    printf("usage:./server [ip] [port]\n");
+    printf("usage:./server [port]\n");
 }
 
-int StartUp(char* ip, int port){
-    if(ip == NULL){
-        exit(-1);
-    }
+int StartUp(int port){
+    //if(ip == NULL){
+    //    exit(-1);
+    //}
     int opt = 1;
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     //不用输ip
-    if(strncmp(ip, "any", 3)){
-        addr.sin_addr.s_addr = INADDR_ANY;
-    }else{
-        addr.sin_addr.s_addr = inet_addr(ip);
-    }
+    //if(strncmp(ip, "any", 2)){
+    addr.sin_addr.s_addr = INADDR_ANY;
+    //}else{
+    //    addr.sin_addr.s_addr = inet_addr(ip);
+    //}
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd < 0){
         perror("socket");
@@ -259,13 +259,15 @@ void status_response(int sock, int status_code)
 
 int echo_www(int sock, const char* path, int size)
 {
+    printf("%s\n", path);
     int fd = open(path, O_RDONLY);
+    printf("open file\n");
     if(fd < 0)
     {
         perror("open");
         return 404;
     }
-    send(sock, "status_line", strlen(status_line), 0);
+    send(sock, status_line, strlen(status_line), 0);
     char len_buf[MAXSIZE/4] = {0};
     sprintf(len_buf, "Content-Length: %u\r\n", size);
     send(sock, len_buf, strlen(len_buf), 0);
@@ -297,6 +299,7 @@ void accept_request(int sock){
         error_code = 404;
         goto end;
     }
+    printf("%s", buf);
     //走到这里buf已经取到了第一行
     while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(method) - 1){
         method[j++] = buf[i++];
@@ -316,7 +319,6 @@ void accept_request(int sock){
     //字符串用于比较的字符数，strncasecmp用来比较参数s1和s2字符串前n个字符，比较时会自动忽略大小写的差异。
     int cgi = 0;
     if(strcasecmp(method, "POST") != 0 && strcasecmp(method, "GET") != 0){
-        perror("strcasecmp");
         exit(-1);
     }
     if(strcasecmp(method, "post") == 0){
@@ -339,20 +341,22 @@ void accept_request(int sock){
         goto end;
     }   
     //将wwwRoot拼接到url之前，以命令形式输出到path
-    sprintf(path,"wwwRoot%s",url);
+    sprintf(path,"webRoot%s",url);
     //请求的资源是web根目录，自动拼接上首页
-    if(path[strlen(path-1)] == '/'){
-        strcat(path, HOMEPAGE);
+    if(path[strlen(path)-1] == '/'){
+        strcat(path,"index/index.html" );
     }
     struct stat st;
+    printf("path2:%s\n",path);
    //stat() 通过文件名filename获取文件信息，并保存在buf所指的结构体stat中 
     if(stat(path, &st) < 0){
+        printf("stat错了");
         error_code = 404;
         goto end;
     }else{
         if(S_ISDIR(st.st_mode)){
             //请求的资源如果是目录，给每个目录下加一个缺省的首页
-            strcat(path, HOMEPAGE);
+            strcat(path, "index/index.html");
         }
         else{
             // S_IXUSR(S_IEXEC) 00100     文件所有者具可执行权限
@@ -386,13 +390,13 @@ void* handle_client(void* arg){
 }
 
 int main(int argc, char* argv[]){
-    if(argc != 3){
+    if(argc != 2){
         usage();
         return 1;
     } 
-    char* ip = argv[1];
-    int port = atoi(argv[2]);
-    int listen_socket = StartUp(ip, port);
+    //char* ip = argv[1];
+    int port = atoi(argv[1]);
+    int listen_socket = StartUp(port);
     struct sockaddr_in client_addr;
     socklen_t len = sizeof(client_addr);
     fflush(stdout);

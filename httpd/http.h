@@ -17,9 +17,9 @@
 #include <pthread.h>
 
 #define MAXSIZE 1024
-#define HOMEPAGE "index.html"
+#define HOMEPAGE "index/index.html"
 
-int StartUp(char* ip, int port);
+int StartUp(int port);
 int get_line(int sock, char* buf, int size);
 void clear_header(int sock);
 int exe_cgi(int sock, char path[], char method[], char* cur_url);
