@@ -255,7 +255,6 @@ void status_response(int sock, int status_code)
     switch(status_code)
     {
     case 404:
-        printf("我在这儿\n");
         echo_error(sock, status_code);
         break;
     case 503:
@@ -326,9 +325,9 @@ void accept_request(int sock){
     //strcasecmp用忽略大小写比较字符串，通过strcasecmp函数可以指定每个
     //字符串用于比较的字符数，strncasecmp用来比较参数s1和s2字符串前n个字符，比较时会自动忽略大小写的差异。
     int cgi = 0;
-    if(strcasecmp(method, "POST") != 0 && strcasecmp(method, "GET") != 0){
-        exit(-1);
-    }
+  //  if(strcasecmp(method, "POST") != 0 && strcasecmp(method, "GET") != 0){
+  //      exit(-1);
+  //  }
     if(strcasecmp(method, "post") == 0){
         cgi = 1;
     }
@@ -352,7 +351,7 @@ void accept_request(int sock){
     sprintf(path,"webRoot%s",url);
     //请求的资源是web根目录，自动拼接上首页
     if(path[strlen(path)-1] == '/'){
-        strcat(path,"index/index.html" );
+        strcat(path,"index/login/index.html");
     }
     struct stat st;
     printf("path2:%s\n",path);
@@ -364,7 +363,7 @@ void accept_request(int sock){
     }else{
         if(S_ISDIR(st.st_mode)){
             //请求的资源如果是目录，给每个目录下加一个缺省的首页
-            strcat(path, "index/index.html");
+            strcat(path, "index/login/index.html");
         }
         else{
             // S_IXUSR(S_IEXEC) 00100     文件所有者具可执行权限
