@@ -14,7 +14,7 @@ void usage(){
     printf("usage:./server [port]\n");
 }
 
-int StartUp(int port){
+static int StartUp(int port){
     //if(ip == NULL){
     //    exit(-1);
     //}
@@ -38,7 +38,7 @@ int StartUp(int port){
         perror("bind");
         exit(-3);
     }
-    if(listen(fd, 10) < 0){
+    if(listen(fd, 100) < 0){
         perror("listen");
         exit(-4);
     }
@@ -98,9 +98,9 @@ void clear_header(int sock){
     char line[MAXSIZE];
     int ret = -1;
     do{
-        printf("%s", line);
-        ret = get_line(sock, line, sizeof(line));
-    }while(ret > 0 && strcmp(line, "\n") != 0);
+    //    printf("%s", line);
+        get_line(sock, line, sizeof(line));
+    }while(strcmp(line, "\n") != 0);
 }
 
 int exe_cgi(int sock, char path[], char method[], char* cur_url){
@@ -128,7 +128,7 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
             return 404;
         }
     }
-    printf("method:%s, path:%s\n", method, path);
+  //  printf("method:%s, path:%s\n", method, path);
     //发送时加上报头
     sprintf(line, "HTTP/1.0 200 OK\r\n");
     sprintf(line, "\r\n");
@@ -223,7 +223,7 @@ void echo_error(int sock, int status_code)
     int fd = open(_404_path, O_RDONLY);
     if(fd < 0)
     {
-        printf("打开失败了\n");
+      //  printf("打开失败了\n");
         perror("open");
         return;
     }
@@ -235,16 +235,16 @@ void echo_error(int sock, int status_code)
     struct stat st;
     if(stat(_404_path, &st) < 0)
     {
-        printf("找不到文件");
+     //   printf("找不到文件");
     }
     //printf("I am here!\n");
     
     ssize_t size = sendfile(sock, fd, NULL, st.st_size);
-    if(size < 0)
-    {
-        perror("sendfile");
-        return;
-    }
+   // if(size < 0)
+   // {
+   //     perror("sendfile");
+   //     return;
+   // }
     close(fd);
 }
 
@@ -266,30 +266,38 @@ void status_response(int sock, int status_code)
 
 int echo_www(int sock, const char* path, int size)
 {
+    clear_header(sock);
     //printf("%s\n", path);
     int fd = open(path, O_RDONLY);
-    printf("open file\n");
-    if(fd < 0)
-    {
-        perror("open");
-        return 404;
-    }
-    send(sock, status_line, strlen(status_line), 0);
-    char len_buf[MAXSIZE/4] = {0};
-    sprintf(len_buf, "Content-Length: %u\r\n", size);
-    send(sock, len_buf, strlen(len_buf), 0);
-    send(sock, blank_line, strlen(blank_line), 0);
-    ssize_t ret = sendfile(sock, fd, NULL, size);
-    if(ret < 0)
-    {
-        perror("sendfile");
-        return 404;
-    }
+    //printf("open file\n");
+   if(fd < 0)
+   {
+       perror("open");
+       return 404;
+   }
+    char line[MAXSIZE] = {0};
+    //sprintf(len_buf, "Content-Length: %u\r\n", size);
+    //send(sock, status_line, strlen(status_line), 0);
+    //send(sock, len_buf, strlen(len_buf), 0);
+    //send(sock, blank_line, strlen(blank_line), 0);
+    sprintf(line, "HTTP/1.0 200 OK\r\n");
+    send(sock, line, strlen(line), 0);
+    sprintf(line, "Content-Type: text/html\r\n");
+    send(sock, line, strlen(line), 0);
+    sprintf(line, "\r\n");
+    send(sock, line, strlen(line), 0);
+    sendfile(sock, fd, NULL, size);
     close(fd);
     return 200;
 }
 
-void accept_request(int sock){
+//void accept_request(int sock){
+//   
+//}
+
+static void* handle_client(void* arg){
+    int sock = (int)arg;
+    //accept_request(*sock); 
     char buf[MAXSIZE] = {0}; 
     char method[MAXSIZE/32];
     char url[MAXSIZE];
@@ -302,19 +310,19 @@ void accept_request(int sock){
     memset(method,'\0',sizeof(method));
     memset(url, '\0',sizeof(url));
     memset(path, '\0', sizeof(path));
-    if(get_line(sock, buf, sizeof(buf)) <= 0){
+    if(get_line(sock, buf, sizeof(buf)) < 0){
         error_code = 404;
         goto end;
     }
-    printf("%s", buf);
+    //printf("%s", buf);
     //走到这里buf已经取到了第一行
-    while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(method) - 1){
+    while(!isspace(buf[i]) && i < sizeof(buf) && j < sizeof(method) - 1){
         method[j++] = buf[i++];
     }
     method[j] = '\0';
     //已经获得了请求的方法
     j = 0;
-    while(isspace(buf[i])){
+    while(isspace(buf[i]) && i < sizeof(buf)){
         i++;
     }
     while(!isspace(buf[i]) && i < strlen(buf) && j < sizeof(url) - 1){
@@ -333,15 +341,15 @@ void accept_request(int sock){
     }
     else if(strcasecmp(method, "get") == 0){
         cur_url = url;
-        while(*cur_url != '\0' && *cur_url != '?'){
+        while(*cur_url != '\0'){
+            if(*cur_url == '?'){
+                *cur_url = '\0';
+                cur_url++;
+                cgi = 1;
+                break;
+            }
             cur_url++;
         }
-        //把格式化的数据写入某个字符串中 头文件stdio.h
-        if(*cur_url == '?'){
-            *cur_url = '\0';
-            cgi = 1;
-        }
-        ++cur_url;
     }
     else{
         error_code = 404;
@@ -349,12 +357,12 @@ void accept_request(int sock){
     }   
     //将wwwRoot拼接到url之前，以命令形式输出到path
     sprintf(path,"webRoot%s",url);
-    printf("path is %s\n", path);
+    //printf("path is %s\n", path);
     //请求的资源是web根目录，自动拼接上首页
     if(path[strlen(path)-1] == '/'){
-        printf("请求的资源是根目录。");
-        strcat(path,"index/login/index.html");
-        printf("path is %s\n", path);
+      //  printf("请求的资源是根目录。");
+        strcat(path,"index.html");
+     //   printf("path is %s\n", path);
     }
     struct stat st;
    //stat() 通过文件名filename获取文件信息，并保存在buf所指的结构体stat中 
@@ -364,10 +372,10 @@ void accept_request(int sock){
         goto end;
     }else{
         if(S_ISDIR(st.st_mode)){
-            printf("请求的资源是目录.");
+       //     printf("请求的资源是目录.");
             //请求的资源如果是目录，给每个目录下加一个缺省的首页
-            strcat(path, "index/login/index.html");
-            printf("path is %s\n", path);
+            strcat(path, "index.html");
+            //printf("path is %s\n", path);
         }
         else{
             // S_IXUSR(S_IEXEC) 00100     文件所有者具可执行权限
@@ -382,7 +390,7 @@ void accept_request(int sock){
         }
         else{
             // 不是cgi, get方法，不带参数
-            clear_header(sock);
+            //clear_header(sock);
             error_code = echo_www(sock, path, st.st_size);
         }
     }
@@ -395,11 +403,6 @@ end:
     close(sock);
 }
 
-void* handle_client(void* arg){
-    int* sock = (int*)arg;
-    accept_request(*sock);
-    return NULL;
-}
 
 int main(int argc, char* argv[]){
     if(argc != 2){
@@ -408,35 +411,34 @@ int main(int argc, char* argv[]){
     } 
     //char* ip = argv[1];
     int port = atoi(argv[1]);
+    size_t connect_num = 1;
     int listen_socket = StartUp(port);
-    struct sockaddr_in client_addr;
-    socklen_t len = sizeof(client_addr);
-    fflush(stdout);
+    signal(SIGPIPE, SIG_IGN);
     while(1){
+        struct sockaddr_in client_addr;
+        socklen_t len = sizeof(client_addr);
         int client_fd = accept(listen_socket, (struct sockaddr*)&client_addr, &len);
         if(client_fd < 0){
             printf("no client\n");
-            fflush(stdout);
             continue;
         }
         //程序走到这里说明有新的连接到来
-        char buf_ip[1024] = {0};
-        if(inet_ntop(AF_INET, &client_addr.sin_addr, buf_ip, sizeof(buf_ip)) == NULL)
-        {
-            perror("inet_ntop");
-            return -5;
-        }
+        printf("%lu\n", connect_num++);
+       // char buf_ip[1024] = {0};
+       // if(inet_ntop(AF_INET, &client_addr.sin_addr, buf_ip, sizeof(buf_ip)) == NULL)
+       // {
+       //     perror("inet_ntop");
+       //     return -5;
+       // }
         pthread_t tid = 0;
         //利用子线程对接受到的套接字进行处理
-        int pthread_create_ret =  pthread_create(&tid, NULL, handle_client, (void*)&client_fd);
-        if(pthread_create_ret < 0)
-        {
-            perror("pthread_create");
-            close(listen_socket);
-            return -6;
-        }
+        pthread_create(&tid, NULL, handle_client, (void *)client_fd);
+        //if(pthread_create_ret < 0)
+        //{
+        //    perror("pthread_create");
+        //    close(listen_socket);
+        //    return -6;
+        //}
         pthread_detach(tid);
     }
-    close(listen_socket);
-    return 0;
 }

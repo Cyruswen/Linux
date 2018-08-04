@@ -19,11 +19,11 @@
 #define MAXSIZE 1024
 #define HOMEPAGE "index/index.html"
 
-int StartUp(int port);
+static int StartUp(int port);
 int get_line(int sock, char* buf, int size);
 void clear_header(int sock);
 int exe_cgi(int sock, char path[], char method[], char* cur_url);
 void status_response(int sock, int status_code);
 int echo_www(int sock, const char* path, int size);
 void accept_request(int sock);
-void* handle_client(void* arg);
+static void* handle_client(void* arg);
