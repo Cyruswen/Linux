@@ -432,7 +432,8 @@ int main(int argc, char* argv[]){
        // }
         pthread_t tid = 0;
         //利用子线程对接受到的套接字进行处理
-        pthread_create(&tid, NULL, handle_client, (void *)client_fd);
+        
+        pthread_create(&tid, NULL, handle_client, (void*)client_fd);
         //if(pthread_create_ret < 0)
         //{
         //    perror("pthread_create");
