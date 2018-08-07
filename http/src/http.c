@@ -96,7 +96,6 @@ int get_line(int sock, char* buf, int size){
 
 void clear_header(int sock){
     char line[MAXSIZE];
-    int ret = -1;
     do{
     //    printf("%s", line);
         get_line(sock, line, sizeof(line));
@@ -131,6 +130,9 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
   //  printf("method:%s, path:%s\n", method, path);
     //发送时加上报头
     sprintf(line, "HTTP/1.0 200 OK\r\n");
+    send(sock, line, strlen(line), 0);
+    sprintf(line, "Content-Type: text/html\r\n");  
+    send(sock, line, strlen(line), 0);
     sprintf(line, "\r\n");
     send(sock, line, strlen(line), 0);
     
@@ -158,11 +160,13 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
         close(output[0]);//子进程将执行结果写到管道发送给父进程，不需要读，所以
         //环境变量父子进程都能看到
         sprintf(method_env, "METHOD=%s", method);
+        //printf("%s\n", method_env);
         putenv(method_env);
         if(strcasecmp(method, "GET") == 0)
         {
-            sprintf(quer_string_env, "QUER_STRING=%s", cur_url);
+            sprintf(quer_string_env, "QUERY_STRING=%s", cur_url);
             putenv(quer_string_env);
+            //printf("%s\n", quer_string_env);
         }
         else
         {
@@ -176,6 +180,7 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
             perror("dup2");
             return 404;
         }
+        //printf("%s\n", path);
         int ret = execl(path, path, NULL);
         if(ret == -1)
         {
@@ -195,8 +200,8 @@ int exe_cgi(int sock, char path[], char method[], char* cur_url){
         {
             for(; i < content_length; i++)
             {
-                recv(sock, &ch,  1, 0);
-                send(input[1], &ch, 1, 0);
+                read(sock, &ch,  1);
+                write(input[1], &ch, 1);
             }
         }
         //走到GET
@@ -350,6 +355,7 @@ static void* handle_client(void* arg){
             }
             cur_url++;
         }
+        //printf("%s\n", cur_url);
     }
     else{
         error_code = 404;
@@ -411,7 +417,7 @@ int main(int argc, char* argv[]){
     } 
     //char* ip = argv[1];
     int port = atoi(argv[1]);
-    size_t connect_num = 1;
+//    size_t connect_num = 1;
     int listen_socket = StartUp(port);
     signal(SIGPIPE, SIG_IGN);
     while(1){
@@ -423,7 +429,7 @@ int main(int argc, char* argv[]){
             continue;
         }
         //程序走到这里说明有新的连接到来
-        printf("%lu\n", connect_num++);
+ //       printf("%lu\n", connect_num++);
        // char buf_ip[1024] = {0};
        // if(inet_ntop(AF_INET, &client_addr.sin_addr, buf_ip, sizeof(buf_ip)) == NULL)
        // {
