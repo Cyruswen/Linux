@@ -78,9 +78,10 @@ int main(int argc, char* argv[]){
         socklen_t len = sizeof(client_addr);
         int client_fd = accept(fd, (struct sockaddr*)&client_addr, &len);
         if(client_fd < 0){
-            perror("accept");
+            printf("no client");
             continue;
         }
+        //走到这儿表示有一个新连接
         pthread_t tid = 0;
         Arg* arg = (Arg*)malloc(sizeof(Arg));
         arg->fd = client_fd;
