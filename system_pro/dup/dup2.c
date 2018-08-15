@@ -11,8 +11,8 @@ int main()
         return -1;
     }
     close(1);
-    close(fd);
     dup2(fd, 1);
+    close(fd);
     while(1)
     {
         char buf[1024] = {0};
