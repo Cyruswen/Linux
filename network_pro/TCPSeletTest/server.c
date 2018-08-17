@@ -2,6 +2,7 @@
 #include <sys/select.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,18 @@ void Reload(int listen_fd, int* connect_list, int connect_list_size, fd_set* rea
             }
         }
         *max_fd = max;
+    }
+}
+
+void Add(int fd, int* connect_list, int connect_list_size)
+{
+    for(int i = 0; i < connect_list_size; i++)
+    {
+        if(connect_list[i] == -1)
+        {
+            connect_list[i] = fd;
+            break;
+        }
     }
 }
 
@@ -85,9 +98,55 @@ int main(int argc, char* argv[])
             printf("select timeout\n");
             continue;
         }
-        //listen_fd
-        //connect_fd
 
+        //listen_fd
+        if(FD_ISSET(listen_fd, &read_fds))
+        {
+            struct sockaddr_in client_addr;
+            socklen_t len = sizeof(client_addr);
+            int connect_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &len);
+            if(connect_fd < 0)
+            {
+                perror("accept");
+                continue;
+            }
+            printf("client %s:%d connect\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+            Add(connect_fd, fd_list, sizeof(fd_list)/sizeof(int));
+        }
+        //处理connect_fd
+        for(size_t i = 0; i < sizeof(fd_list)/sizeof(int); i++)
+        {
+            if(fd_list[i] == -1)
+            {
+                continue;
+            }
+
+            if(!FD_ISSET(fd_list[i], &read_fds))
+            {
+                continue;
+            }
+
+            char buf[1024] = {0};
+            ssize_t read_size = read(fd_list[i], buf, sizeof(buf)-1);
+            if(read_size < 0)
+            {
+                perror("read");
+                close(fd_list[i]);
+                fd_list[i] = -1;
+                return 2;
+            }
+
+            if(read_size == 0)
+            {
+                printf("client say goodbye!\n");
+                close(fd_list[i]);
+                fd_list[i] = -1;
+                return 2;
+            }
+            printf("client say: %s\n", buf);
+            write(fd_list[i], buf, sizeof(buf)-1);
+        }
         
     }
+    return 0;
 }
